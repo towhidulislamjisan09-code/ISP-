@@ -1,31 +1,30 @@
-import sqlite3 from 'sqlite3';
-import { open, Database } from 'sqlite';
+import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
-let _db: Database | null = null;
+let _db: any = null;
 
-async function getDb() {
+function getDb() {
   if (_db) return _db;
   
   const dbPath = path.join(process.cwd(), 'database.sqlite');
-  const dbExists = fs.existsSync(dbPath);
+  _db = new Database(dbPath);
 
-  _db = await open({
-    filename: dbPath,
-    driver: sqlite3.Database
-  });
+  // Enable foreign keys
+  _db.pragma('foreign_keys = ON');
 
-  if (!dbExists) {
-    console.log('Initializing SQLite database...');
-    await initializeDatabase(_db);
+  // If the database has no packages table, initialize it
+  try {
+    _db.prepare('SELECT 1 FROM packages LIMIT 1').get();
+  } catch (e) {
+    console.log('Initializing SQLite schema with better-sqlite3...');
+    initializeDatabase(_db);
   }
 
   return _db;
 }
 
-async function initializeDatabase(db: Database) {
-  // SQLite compatible schema
+function initializeDatabase(db: any) {
   const schema = `
     CREATE TABLE IF NOT EXISTS packages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,57 +123,36 @@ async function initializeDatabase(db: Database) {
     ('Premium', 50, 1200.00, 'Unlimited', '50M_Unlimited');
 
     INSERT INTO users (username, password, name, phone, role) VALUES 
-    ('admin', '$2b$10$w8.BmqU2.6J/H3I2oBvAueMhZf.S1L7fXv9KxU3k/Xh/oYj7G0G0.', 'System Admin', '01700000000', 'admin');
+    ('admin', '$2b$10$vUWuw9BwwPEGd5btDBEkK.jXwuWtpLaWqpgo41GjOhkjV.7QdAITi', 'System Admin', '01700000000', 'admin');
   `;
 
-  // Split and run commands
-  const commands = schema.split(';').filter(c => c.trim());
-  for (const cmd of commands) {
-    await db.run(cmd);
-  }
+  // better-sqlite3 exec can run multiple queries separated by semicolons directly
+  db.exec(schema);
 }
 
-// Shim to maintain compatibility with mysql2 promise API used in controllers
-export const db = {
-  execute: async (sql: string, params: any[] = []) => {
-    const database = await getDb();
-    try {
-      if (sql.trim().toUpperCase().startsWith('SELECT')) {
-        const rows = await database.all(sql, params);
-        return [rows, null];
-      } else {
-        const result = await database.run(sql, params);
-        return [{
-          insertId: result.lastID,
-          affectedRows: result.changes
-        }, null];
-      }
-    } catch (error: any) {
-      // Normalize common error codes
-      if (error.message?.includes('UNIQUE constraint failed')) {
-        error.code = 'ER_DUP_ENTRY';
-      }
-      throw error;
+const execQuery = async (sql: string, params: any[] = []) => {
+  const database = getDb();
+  try {
+    const stmt = database.prepare(sql);
+    if (stmt.reader) {
+      const rows = stmt.all(...params);
+      return [rows, null];
+    } else {
+      const result = stmt.run(...params);
+      return [{
+        insertId: result.lastInsertRowid,
+        affectedRows: result.changes
+      }, null];
     }
-  },
-  query: async (sql: string, params: any[] = []) => {
-    const database = await getDb();
-    try {
-      if (sql.trim().toUpperCase().startsWith('SELECT')) {
-        const rows = await database.all(sql, params);
-        return [rows, null];
-      } else {
-        const result = await database.run(sql, params);
-        return [{
-          insertId: result.lastID,
-          affectedRows: result.changes
-        }, null];
-      }
-    } catch (error: any) {
-      if (error.message?.includes('UNIQUE constraint failed')) {
-        error.code = 'ER_DUP_ENTRY';
-      }
-      throw error;
+  } catch (error: any) {
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      error.code = 'ER_DUP_ENTRY';
     }
+    throw error;
   }
+};
+
+export const db = {
+  execute: execQuery,
+  query: execQuery
 };

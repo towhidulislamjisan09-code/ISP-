@@ -105,4 +105,4 @@ INSERT INTO packages (name, speed, price, fup_limit, mikrotik_profile) VALUES
 ('Premium', 50, 1200.00, 'Unlimited', '50M_Unlimited');
 
 -- Default Admin (Password: admin123)
-INSERT INTO users (username, password, name, phone, role) VALUES ('admin', '$2b$10$w8.BmqU2.6J/H3I2oBvAueMhZf.S1L7fXv9KxU3k/Xh/oYj7G0G0.', 'System Admin', '01700000000', 'admin');
+INSERT INTO users (username, password, name, phone, role) VALUES ('admin', '$2b$10$vUWuw9BwwPEGd5btDBEkK.jXwuWtpLaWqpgo41GjOhkjV.7QdAITi', 'System Admin', '01700000000', 'admin');
