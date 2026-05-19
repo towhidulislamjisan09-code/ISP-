@@ -30,9 +30,12 @@ export const Users = () => {
     setLoading(true);
     try {
       const response = await api.get('/users');
-      setUsers(response.data.data);
-    } catch (error) {
-      toast.error('Failed to load users');
+      const data = response.data.data !== undefined ? response.data.data : response.data;
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error('[Users] Error loading users:', error);
+      toast.error(error.response?.data?.error || 'Failed to load user list');
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -41,8 +44,11 @@ export const Users = () => {
   const fetchPackages = async () => {
     try {
       const response = await api.get('/packages');
-      setPackages(response.data.data);
-    } catch (error) {}
+      const data = response.data.data !== undefined ? response.data.data : response.data;
+      setPackages(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error('[Users] Error loading packages list:', error);
+    }
   };
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {

@@ -28,9 +28,12 @@ export const Tickets = () => {
     setLoading(true);
     try {
       const response = await api.get('/tickets');
-      setTickets(response.data.data);
-    } catch (error) {
-      toast.error('Failed to load assist buffer');
+      const data = response.data.data !== undefined ? response.data.data : response.data;
+      setTickets(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error('[Tickets] Failed to load tickets:', error);
+      toast.error(error.response?.data?.error || 'Failed to load assist buffer');
+      setTickets([]);
     } finally {
       setLoading(false);
     }
@@ -39,8 +42,11 @@ export const Tickets = () => {
   const fetchReplies = async (ticketId: number) => {
     try {
       const response = await api.get(`/tickets/${ticketId}/replies`);
-      setReplies(response.data.data);
-    } catch (error) {}
+      const data = response.data.data !== undefined ? response.data.data : response.data;
+      setReplies(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error('[Tickets] Failed to fetch replies:', error);
+    }
   };
 
   const handleReply = async (e: React.FormEvent) => {

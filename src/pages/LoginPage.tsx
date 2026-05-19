@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api/client';
 import { toast } from 'react-hot-toast';
 import { Shield, Lock, User, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -15,7 +15,7 @@ export const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await axios.post('/api/auth/login', { username, password });
+      const response = await api.post('/auth/login', { username, password });
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       toast.success('Login Successful');

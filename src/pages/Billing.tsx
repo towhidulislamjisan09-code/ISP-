@@ -24,9 +24,12 @@ export const Billing = () => {
     setLoading(true);
     try {
       const response = await api.get('/billing');
-      setBills(response.data.data);
-    } catch (error) {
-      toast.error('Failed to load ledger');
+      const data = response.data.data !== undefined ? response.data.data : response.data;
+      setBills(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error('[Billing] Failed to load ledger:', error);
+      toast.error(error.response?.data?.error || 'Failed to load ledger');
+      setBills([]);
     } finally {
       setLoading(false);
     }

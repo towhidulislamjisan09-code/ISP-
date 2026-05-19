@@ -25,9 +25,12 @@ export const Packages = () => {
     setLoading(true);
     try {
       const response = await api.get('/packages');
-      setPackages(response.data.data);
-    } catch (error) {
-      toast.error('Failed to load packages');
+      const data = response.data.data !== undefined ? response.data.data : response.data;
+      setPackages(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error('[Packages] Error fetching packages:', error);
+      toast.error(error.response?.data?.error || 'Failed to load service tiers Packages');
+      setPackages([]);
     } finally {
       setLoading(false);
     }
@@ -38,15 +41,16 @@ export const Packages = () => {
     try {
       if (isEditing) {
         await api.put(`/packages/${currentPackage.id}`, currentPackage);
-        toast.success('Package updated');
+        toast.success('Service package updated successfully');
       } else {
         await api.post('/packages', currentPackage);
-        toast.success('Package created');
+        toast.success('Service package created successfully');
       }
       setShowModal(false);
       fetchPackages();
-    } catch (error) {
-      toast.error('Something went wrong');
+    } catch (error: any) {
+      console.error('[Packages] Form submit error:', error);
+      toast.error(error.response?.data?.error || 'Failed to sync service tier package specifications');
     }
   };
 
@@ -54,10 +58,11 @@ export const Packages = () => {
     if (!window.confirm('Delete this package?')) return;
     try {
       await api.delete(`/packages/${id}`);
-      toast.success('Package removed');
+      toast.success('Service package terminated successfully');
       fetchPackages();
-    } catch (error) {
-      toast.error('Failed to delete');
+    } catch (error: any) {
+      console.error('[Packages] Delete action error:', error);
+      toast.error(error.response?.data?.error || 'Failed to delete service tier packages');
     }
   };
 
