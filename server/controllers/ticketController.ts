@@ -1,90 +1,171 @@
 import { Request, Response } from 'express';
-import { db } from '../config/db';
+import { db } from '../config/firebaseAdmin';
 
+/**
+ * GET /api/tickets
+ * Retrieves service tickets with join details, filtered by customer role if applicable.
+ */
 export const getAllTickets = async (req: any, res: Response) => {
   try {
-    let query = `
-      SELECT t.*, u.name as user_name, u.username as user_username
-      FROM tickets t
-      JOIN users u ON t.user_id = u.id
-    `;
-    const params = [];
+    // 1. Fetch user map lookup
+    const usersSnapshot = await db.collection('users').get();
+    const userMap = new Map<string, any>();
+    usersSnapshot.docs.forEach(doc => {
+      userMap.set(doc.id, { id: doc.id, ...doc.data() });
+    });
 
+    // 2. Fetch tickets
+    let ticketsRef: any = db.collection('tickets');
     if (req.user.role !== 'admin') {
-      query += ' WHERE t.user_id = ?';
-      params.push(req.user.id);
+      ticketsRef = ticketsRef.where('user_id', '==', req.user.id);
     }
-
-    query += ' ORDER BY t.updated_at DESC';
     
-    const [rows]: any = await db.execute(query, params);
+    const ticketsSnapshot = await ticketsRef.get();
+    const rows = ticketsSnapshot.docs.map((doc: any) => {
+      const data = doc.data();
+      const user = userMap.get(data.user_id);
+      return {
+        id: doc.id,
+        ...data,
+        user_name: user ? user.name : 'Unknown User',
+        user_username: user ? user.username : 'unknown'
+      };
+    }) as any[];
+
+    // Sort by updated_at or created_at descending
+    rows.sort((a, b) => {
+      const dateA = a.updated_at || a.created_at || a.createdAt || '';
+      const dateB = b.updated_at || b.created_at || b.createdAt || '';
+      return dateB.localeCompare(dateA);
+    });
+
     res.json({ data: rows });
   } catch (error) {
+    console.error('[getAllTickets] Firestore reading error:', error);
     res.status(500).json({ error: 'Database error' });
   }
 };
 
+/**
+ * POST /api/tickets
+ * Submits a new technical support/customer ticket to Firestore.
+ */
 export const createTicket = async (req: any, res: Response) => {
   const { subject, description, priority } = req.body;
   const user_id = req.user.id;
 
   try {
-    const [result]: any = await db.execute(
-      'INSERT INTO tickets (user_id, subject, description, priority, status) VALUES (?, ?, ?, ?, ?)',
-      [user_id, subject, description, priority || 'Medium', 'Open']
-    );
-    res.status(201).json({ id: result.insertId, message: 'Ticket created successfully' });
+    const payload = {
+      user_id,
+      subject: subject || '',
+      description: description || '',
+      priority: priority || 'Medium',
+      status: 'Open',
+      created_at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const docRef = await db.collection('tickets').add(payload);
+    res.status(201).json({ id: docRef.id, message: 'Ticket created successfully' });
   } catch (error) {
+    console.error('[createTicket] Firestore write error:', error);
     res.status(500).json({ error: 'Database error' });
   }
 };
 
+/**
+ * GET /api/tickets/replies/:id
+ * Fetches replies associated with a ticket ID.
+ */
 export const getTicketReplies = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    const [rows]: any = await db.execute(`
-      SELECT r.*, u.name as user_name, u.role as user_role
-      FROM ticket_replies r
-      JOIN users u ON r.user_id = u.id
-      WHERE r.ticket_id = ?
-      ORDER BY r.created_at ASC
-    `, [id]);
+    // 1. Fetch user map lookup
+    const usersSnapshot = await db.collection('users').get();
+    const userMap = new Map<string, any>();
+    usersSnapshot.docs.forEach(doc => {
+      userMap.set(doc.id, { id: doc.id, ...doc.data() });
+    });
+
+    // 2. Fetch ticket replies
+    const repliesSnapshot = await db.collection('ticket_replies')
+      .where('ticket_id', '==', id)
+      .get();
+
+    const rows = repliesSnapshot.docs.map(doc => {
+      const data = doc.data();
+      const user = userMap.get(data.user_id);
+      return {
+        id: doc.id,
+        ...data,
+        user_name: user ? user.name : 'Unknown User',
+        user_role: user ? user.role : 'customer'
+      };
+    }) as any[];
+
+    // Sort by chronological order
+    rows.sort((a, b) => {
+      const dateA = a.created_at || a.createdAt || '';
+      const dateB = b.created_at || b.createdAt || '';
+      return dateA.localeCompare(dateB);
+    });
+
     res.json({ data: rows });
   } catch (error) {
+    console.error('[getTicketReplies] Firestore error:', error);
     res.status(500).json({ error: 'Database error' });
   }
 };
 
+/**
+ * POST /api/tickets/reply/:id
+ * Submits a diagnostic/customer reply to a specific ticket.
+ */
 export const replyTicket = async (req: any, res: Response) => {
   const { id } = req.params;
   const { message } = req.body;
   const user_id = req.user.id;
 
   try {
-    await db.execute(
-      'INSERT INTO ticket_replies (ticket_id, user_id, message) VALUES (?, ?, ?)',
-      [id, user_id, message]
-    );
+    const replyPayload = {
+      ticket_id: id,
+      user_id,
+      message: message || '',
+      created_at: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+
+    await db.collection('ticket_replies').add(replyPayload);
     
-    // Update ticket status if admin replied
-    if (req.user.role === 'admin') {
-      await db.execute('UPDATE tickets SET status = ? WHERE id = ?', ['In Progress', id]);
-    } else {
-      await db.execute('UPDATE tickets SET status = ? WHERE id = ?', ['Open', id]);
-    }
+    // Update ticket status depending on responder
+    const newStatus = req.user.role === 'admin' ? 'In Progress' : 'Open';
+    await db.collection('tickets').doc(id).update({
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    });
 
     res.status(201).json({ message: 'Reply submitted' });
   } catch (error) {
+    console.error('[replyTicket] Firestore update error:', error);
     res.status(500).json({ error: 'Database error' });
   }
 };
 
+/**
+ * PUT /api/tickets/close/:id
+ * Marks a technical ticket as Closed.
+ */
 export const closeTicket = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    await db.execute('UPDATE tickets SET status = ? WHERE id = ?', ['Closed', id]);
+    await db.collection('tickets').doc(id).update({
+      status: 'Closed',
+      updated_at: new Date().toISOString()
+    });
     res.json({ message: 'Ticket closed' });
   } catch (error) {
+    console.error('[closeTicket] Firestore write error:', error);
     res.status(500).json({ error: 'Database error' });
   }
 };

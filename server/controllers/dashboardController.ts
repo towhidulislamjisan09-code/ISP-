@@ -1,37 +1,43 @@
 import { Request, Response } from 'express';
-import { db } from '../config/db';
+import { db } from '../config/firebaseAdmin';
 
+/**
+ * GET /api/dashboard/stats
+ * Aggregates live Firestore figures to serve system-wide administrative telemetry.
+ */
 export const getAdminStats = async (req: Request, res: Response) => {
-  const runQuery = async (query: string, fallback: number): Promise<number> => {
-    try {
-      const [rows]: any = await db.execute(query);
-      if (rows && rows.length > 0) {
-        const firstKey = Object.keys(rows[0])[0];
-        return Number(rows[0][firstKey] ?? fallback);
-      }
-      return fallback;
-    } catch (err) {
-      console.error(`[DashboardStats] Individual query error context for "${query}":`, err);
-      return fallback;
-    }
-  };
-
   try {
+    // 1. Perform optimized parallelized Firestore counts/queries
     const [
-      totalCustomers,
-      activeCustomers,
-      suspendedCustomers,
-      monthlyRevenue,
-      unpaidBills,
-      openTickets
+      totalSnap,
+      activeSnap,
+      suspendedSnap,
+      unpaidSnap,
+      openTicketsSnap,
+      paymentsSnap
     ] = await Promise.all([
-      runQuery("SELECT COUNT(*) AS total FROM users", 0),
-      runQuery("SELECT COUNT(*) AS active FROM users WHERE status='Active'", 0),
-      runQuery("SELECT COUNT(*) AS suspended FROM users WHERE status='Suspended'", 0),
-      runQuery("SELECT IFNULL(SUM(amount),0) AS revenue FROM payments", 0),
-      runQuery("SELECT COUNT(*) AS unpaid FROM bills WHERE status='Unpaid'", 0),
-      runQuery("SELECT COUNT(*) AS open FROM tickets WHERE status='Open'", 0)
+      db.collection('users').count().get(),
+      db.collection('users').where('status', '==', 'Active').count().get(),
+      db.collection('users').where('status', '==', 'Suspended').count().get(),
+      db.collection('bills').where('status', '==', 'Unpaid').count().get(),
+      db.collection('tickets').where('status', '==', 'Open').count().get(),
+      db.collection('payments').get() // For summing revenue
     ]);
+
+    const totalCustomers = totalSnap.data().count || 0;
+    const activeCustomers = activeSnap.data().count || 0;
+    const suspendedCustomers = suspendedSnap.data().count || 0;
+    const unpaidBills = unpaidSnap.data().count || 0;
+    const openTickets = openTicketsSnap.data().count || 0;
+
+    // Calculate sum of payments revenue
+    let monthlyRevenue = 0;
+    paymentsSnap.docs.forEach(doc => {
+      const data = doc.data();
+      if (data.status === 'Approved' || data.status === undefined) {
+        monthlyRevenue += Number(data.amount) || 0;
+      }
+    });
 
     const stats = {
       totalCustomers,
@@ -41,7 +47,7 @@ export const getAdminStats = async (req: Request, res: Response) => {
       unpaidBills,
       openTickets,
       
-      // Legacy support values for older frontend state properties
+      // Legacy support values for standard frontend integration properties
       totalUsers: totalCustomers,
       activeUsers: activeCustomers,
       suspendedUsers: suspendedCustomers,
@@ -49,7 +55,7 @@ export const getAdminStats = async (req: Request, res: Response) => {
       totalDue: unpaidBills
     };
 
-    console.log('[getAdminStats] Safe retrieval complete. Payload:', stats);
+    console.log('[getAdminStats] Firestore live aggregation complete:', stats);
     res.json({
       ...stats,
       data: stats
