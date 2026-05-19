@@ -4,7 +4,12 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import authRoutes from './server/routes/authRoutes';
-import customerRoutes from './server/routes/customerRoutes';
+import userRoutes from './server/routes/userRoutes';
+import packageRoutes from './server/routes/packageRoutes';
+import billingRoutes from './server/routes/billingRoutes';
+import paymentRoutes from './server/routes/paymentRoutes';
+import ticketRoutes from './server/routes/ticketRoutes';
+import dashboardRoutes from './server/routes/dashboardRoutes';
 
 dotenv.config();
 
@@ -30,7 +35,12 @@ async function startServer() {
   });
 
   app.use('/api/auth', authRoutes);
-  app.use('/api/customers', customerRoutes);
+  app.use('/api/users', userRoutes);
+  app.use('/api/packages', packageRoutes);
+  app.use('/api/billing', billingRoutes);
+  app.use('/api/payments', paymentRoutes);
+  app.use('/api/tickets', ticketRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
 
   // Example Gemini endpoint for support chat
   app.post("/api/chat", async (req, res) => {

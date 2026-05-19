@@ -9,21 +9,33 @@ export const login = async (req: Request, res: Response) => {
   const { username, password } = req.body;
 
   try {
-    // In a real scenario, we'd query the DB:
-    // const [users]: any = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
-    // const user = users[0];
+    const [users]: any = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
+    const user = users[0];
 
-    // For the starter code, we accept a hardcoded admin for demonstration
-    if (username === 'admin' && password === 'admin123') {
-      const token = jwt.sign(
-        { id: 1, username: 'admin', role: 'admin' },
-        JWT_SECRET,
-        { expiresIn: '8h' }
-      );
-      return res.json({ token, user: { username: 'admin', role: 'admin', name: 'System Admin' } });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    res.status(401).json({ error: 'Invalid credentials' });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    res.json({ 
+      token, 
+      user: { 
+        id: user.id,
+        username: user.username, 
+        role: user.role, 
+        name: user.name 
+      } 
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });

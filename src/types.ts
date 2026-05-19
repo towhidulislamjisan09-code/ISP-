@@ -1,38 +1,74 @@
-export interface Package {
-  id: string;
+export interface User {
+  id: number;
+  username: string;
   name: string;
-  speed: string; // e.g. "20 Mbps"
+  phone: string;
+  address?: string;
+  role: 'admin' | 'customer';
+  package_id?: number | null;
+  status: 'Active' | 'Suspended' | 'Expired' | 'Pending';
+  ip_address?: string;
+  mac_address?: string;
+  pppoe_username?: string;
+  total_due: number;
+  expiry_date?: string;
+  created_at: string;
+  package_name?: string;
+  package_speed?: number;
+}
+
+export interface Package {
+  id: number;
+  name: string;
+  speed: number;
   price: number;
-  features: string[];
+  fup_limit?: string;
+  mikrotik_profile?: string;
+  description?: string;
+  created_at: string;
 }
 
-export interface Invoice {
-  id: string;
-  month: string;
+export interface Bill {
+  id: number;
+  user_id: number;
+  user_name?: string;
+  user_username?: string;
   amount: number;
-  status: 'Paid' | 'Unpaid' | 'Pending';
-  dueDate: string;
+  billing_month: string;
+  due_date: string;
+  status: 'Paid' | 'Unpaid' | 'Partially Paid';
+  created_at: string;
 }
 
-export interface SupportTicket {
-  id: string;
+export interface Payment {
+  id: number;
+  user_id: number;
+  user_name?: string;
+  amount: number;
+  transaction_id: string;
+  payment_method: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  payment_date: string;
+  notes?: string;
+}
+
+export interface Ticket {
+  id: number;
+  user_id: number;
+  user_name?: string;
   subject: string;
-  status: 'Open' | 'Closed' | 'In Progress';
-  date: string;
-  lastUpdate: string;
+  description: string;
+  status: 'Open' | 'In Progress' | 'Closed';
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
+  created_at: string;
+  updated_at: string;
 }
 
-export interface AppState {
-  user: {
-    name: string;
-    id: string;
-    status: 'Active' | 'Inactive';
-    currentPackage: string;
-    balance: number;
-  };
-  usage: {
-    total: number;
-    limit: number | null;
-    history: { date: string; value: number }[];
-  };
+export interface Stats {
+  totalUsers: number;
+  activeUsers: number;
+  suspendedUsers: number;
+  totalRevenue: number;
+  totalDue: number;
+  openTickets: number;
 }
