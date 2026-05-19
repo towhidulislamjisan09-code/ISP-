@@ -1,29 +1,29 @@
-import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-console.log("Connecting to MySQL...");
+import mysql from "mysql2/promise";
 
 export const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",
+  port: 4000,
+  user: "DhZiWPLmxpjnxwC.root",
+  password: "VeIMA2KTntS2HT1G",
+  database: "sys",
   ssl: {
-    ca: process.env.DB_SSL_CA
-  }
+    rejectUnauthorized: true
+  },
+  waitForConnections: true,
+  connectionLimit: 10
 });
 
-// Startup test to verify connection
-pool.getConnection()
-  .then((conn) => {
-    console.log("MySQL Connected Successfully");
+async function testConnection() {
+  try {
+    const conn = await pool.getConnection();
+    console.log("TiDB Connected Successfully");
     conn.release();
-  })
-  .catch((err) => {
-    console.error("MySQL connection error:", err);
-  });
+  } catch (err) {
+    console.error("TiDB Connection Failed:", err);
+  }
+}
+
+testConnection();
 
 export const db = pool;
+export default pool;
