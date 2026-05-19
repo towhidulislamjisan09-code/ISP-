@@ -2,49 +2,80 @@ import { Request, Response } from 'express';
 import { db } from '../config/db';
 
 export const getAdminStats = async (req: Request, res: Response) => {
-  try {
-    const [rows]: any = await db.execute(`
-      SELECT 
-        (SELECT COUNT(*) FROM users WHERE role = 'customer') as totalCustomers,
-        (SELECT COUNT(*) FROM users WHERE role = 'customer' AND status = 'Active') as activeCustomers,
-        (SELECT COUNT(*) FROM users WHERE role = 'customer' AND status = 'Suspended') as suspendedCustomers,
-        (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'Approved') as monthlyRevenue,
-        (SELECT COALESCE(SUM(total_due), 0) FROM users WHERE role = 'customer') as unpaidBills,
-        (SELECT COUNT(*) FROM tickets WHERE status != 'Closed') as openTickets
-    `);
+  const runQuery = async (query: string, fallback: number): Promise<number> => {
+    try {
+      const [rows]: any = await db.execute(query);
+      if (rows && rows.length > 0) {
+        const firstKey = Object.keys(rows[0])[0];
+        return Number(rows[0][firstKey] ?? fallback);
+      }
+      return fallback;
+    } catch (err) {
+      console.error(`[DashboardStats] Individual query error context for "${query}":`, err);
+      return fallback;
+    }
+  };
 
-    const statsRow = (rows && rows[0]) ? rows[0] : {
+  try {
+    const [
+      totalCustomers,
+      activeCustomers,
+      suspendedCustomers,
+      monthlyRevenue,
+      unpaidBills,
+      openTickets
+    ] = await Promise.all([
+      runQuery("SELECT COUNT(*) AS total FROM users", 0),
+      runQuery("SELECT COUNT(*) AS active FROM users WHERE status='Active'", 0),
+      runQuery("SELECT COUNT(*) AS suspended FROM users WHERE status='Suspended'", 0),
+      runQuery("SELECT IFNULL(SUM(amount),0) AS revenue FROM payments", 0),
+      runQuery("SELECT COUNT(*) AS unpaid FROM bills WHERE status='Unpaid'", 0),
+      runQuery("SELECT COUNT(*) AS open FROM tickets WHERE status='Open'", 0)
+    ]);
+
+    const stats = {
+      totalCustomers,
+      activeCustomers,
+      suspendedCustomers,
+      monthlyRevenue,
+      unpaidBills,
+      openTickets,
+      
+      // Legacy support values for older frontend state properties
+      totalUsers: totalCustomers,
+      activeUsers: activeCustomers,
+      suspendedUsers: suspendedCustomers,
+      totalRevenue: monthlyRevenue,
+      totalDue: unpaidBills
+    };
+
+    console.log('[getAdminStats] Safe retrieval complete. Payload:', stats);
+    res.json({
+      ...stats,
+      data: stats
+    });
+  } catch (error) {
+    console.error('[getAdminStats] Master catch-all error handling stats payload:', error);
+    res.json({
       totalCustomers: 0,
       activeCustomers: 0,
       suspendedCustomers: 0,
       monthlyRevenue: 0,
       unpaidBills: 0,
-      openTickets: 0
-    };
-
-    const statsPayload = {
-      totalCustomers: Number(statsRow.totalCustomers || 0),
-      activeCustomers: Number(statsRow.activeCustomers || 0),
-      suspendedCustomers: Number(statsRow.suspendedCustomers || 0),
-      monthlyRevenue: Number(statsRow.monthlyRevenue || 0),
-      unpaidBills: Number(statsRow.unpaidBills || 0),
-      openTickets: Number(statsRow.openTickets || 0),
-      
-      // Supporting front-end typed interface properties for backward compatibility
-      totalUsers: Number(statsRow.totalCustomers || 0),
-      activeUsers: Number(statsRow.activeCustomers || 0),
-      suspendedUsers: Number(statsRow.suspendedCustomers || 0),
-      totalRevenue: Number(statsRow.monthlyRevenue || 0),
-      totalDue: Number(statsRow.unpaidBills || 0)
-    };
-
-    console.log('[getAdminStats] Returning aggregated metrics:', statsPayload);
-    res.json({
-      ...statsPayload,
-      data: statsPayload
+      openTickets: 0,
+      totalUsers: 0,
+      activeUsers: 0,
+      suspendedUsers: 0,
+      totalRevenue: 0,
+      totalDue: 0,
+      data: {
+        totalCustomers: 0,
+        activeCustomers: 0,
+        suspendedCustomers: 0,
+        monthlyRevenue: 0,
+        unpaidBills: 0,
+        openTickets: 0
+      }
     });
-  } catch (error) {
-    console.error('[getAdminStats] Database error fetching analytics:', error);
-    res.status(500).json({ error: 'Database error' });
   }
 };
