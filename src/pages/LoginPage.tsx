@@ -36,11 +36,16 @@ export const LoginPage = () => {
       >
         <div className="p-8 md:p-12">
           <div className="flex flex-col items-center mb-10 text-center">
-            <div className="w-20 h-20 bg-brand-600 rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-brand-600/20 rotate-12 group hover:rotate-0 transition-transform duration-500">
-               <Shield size={40} className="text-white" />
+            <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mb-6 shadow-xl border border-slate-100 p-2 overflow-hidden hover:scale-105 transition-transform duration-300">
+               <img 
+                 src="/src/assets/images/shoktinet_logo_1779223049145.png" 
+                 alt="SHOKTINET Broadband Logo" 
+                 className="w-full h-full object-contain" 
+                 referrerPolicy="no-referrer" 
+               />
             </div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tight">Admin Terminal</h1>
-            <p className="text-slate-500 font-medium mt-2 italic text-sm">ISP Management Control v2.0</p>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight">SHOKTINET Broadband</h1>
+            <p className="text-slate-500 font-medium mt-2 italic text-sm">ISP Management Portal</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">

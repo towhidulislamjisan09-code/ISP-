@@ -1,6 +1,6 @@
 {
-  "name": "Triangle Self-Care",
-  "description": "Internet Service Provider customer management mobile application for managing connections, bills, and support tickets for Triangle.",
+  "name": "SHOKTINET Broadband",
+  "description": "Production ISP Management System for SHOKTINET Broadband clients, billing, subscriber packages, optical networks, and support desk.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

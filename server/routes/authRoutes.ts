@@ -1,10 +1,13 @@
 import { Router } from 'express';
-import * as authController from '../controllers/authController';
+import { login, getProfile } from '../controllers/authController';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-router.post('/login', authController.login);
-router.get('/profile', authenticateToken, authController.getProfile);
+// Route for authenticating users
+router.post('/login', login);
+
+// Route for obtaining currently logged-in user profile metrics
+router.get('/profile', authenticateToken, getProfile);
 
 export default router;

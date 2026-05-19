@@ -7,7 +7,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { LoginPage } from './pages/LoginPage';
-import { AdminLayout } from './components/AdminLayout';
+import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Users } from './pages/Users';
 import { Packages } from './pages/Packages';
@@ -18,7 +18,8 @@ import { Tickets } from './pages/Tickets';
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('token');
-  if (!token) return <Navigate to="/login" replace />;
+  const isValid = token && token !== 'null' && token !== 'undefined';
+  if (!isValid) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
 
@@ -40,9 +41,10 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         
+        {/* /admin Route layout with new Layout styling */}
         <Route path="/admin" element={
           <ProtectedRoute>
-            <AdminLayout />
+            <Layout />
           </ProtectedRoute>
         }>
           <Route index element={<Dashboard />} />
@@ -59,11 +61,21 @@ export default function App() {
           } />
         </Route>
 
+        {/* /dashboard route matching /admin index view */}
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<Dashboard />} />
+        </Route>
+
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
     </BrowserRouter>
   );
 }
+
 
 
