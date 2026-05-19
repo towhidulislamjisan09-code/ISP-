@@ -18,6 +18,17 @@ async function testConnection() {
     const conn = await pool.getConnection();
     console.log("TiDB Connected Successfully");
     conn.release();
+
+    // Verify required tables exist without creating them
+    const tables = ['users', 'packages', 'bills', 'payments', 'tickets'];
+    for (const table of tables) {
+      try {
+        await pool.query(`SELECT 1 FROM \`${table}\` LIMIT 1`);
+        console.log(`[db] Verified table exists: ${table}`);
+      } catch (err: any) {
+        console.warn(`[db] Table lookup check for "${table}":`, err.message || err);
+      }
+    }
   } catch (err) {
     console.error("TiDB Connection Failed:", err);
   }

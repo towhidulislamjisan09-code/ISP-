@@ -1,31 +1,23 @@
 import { Request, Response } from 'express';
 import { db } from '../config/db';
 
-let hasCreatedTable = false;
+let hasCheckedTable = false;
+let cachedColumns: string[] = [];
 
 /**
- * Ensures that the packages table exists in the MySQL database.
- * Supports the user's requested schema while adding an optional description field 
- * to serve the existing frontend template properly.
+ * Gets the actual column names from the "packages" table dynamically.
+ * Helps prevent errors if columns are camelCase or snake_case without assuming schema DDL.
  */
-const ensureTableExists = async () => {
-  if (hasCreatedTable) return;
+const getPackagesColumns = async (): Promise<string[]> => {
+  if (cachedColumns.length > 0) return cachedColumns;
   try {
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS packages (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100),
-        speed INT,
-        price DECIMAL(10,2),
-        fupLimit INT,
-        mikrotikProfile VARCHAR(100),
-        description TEXT
-      )
-    `);
-    hasCreatedTable = true;
-    console.log('[packageController] Verified/created "packages" table successfully.');
+    const [cols]: any = await db.execute('SHOW COLUMNS FROM packages');
+    cachedColumns = cols.map((c: any) => c.Field);
+    hasCheckedTable = true;
+    return cachedColumns;
   } catch (err) {
-    console.error('[packageController] Error verifying packages table:', err);
+    console.error('[packageController] Error reading columns of packages table:', err);
+    return [];
   }
 };
 
@@ -36,25 +28,20 @@ const ensureTableExists = async () => {
  */
 export const getAllPackages = async (req: Request, res: Response) => {
   try {
-    await ensureTableExists();
+    await getPackagesColumns();
     
-    // Select both the schema columns and their snake_case equivalents to support the frontend out of the box
-    const [rows]: any = await db.execute(`
-      SELECT 
-        id, 
-        name, 
-        speed, 
-        price, 
-        fupLimit, 
-        fupLimit AS fup_limit, 
-        mikrotikProfile, 
-        mikrotikProfile AS mikrotik_profile,
-        description 
-      FROM packages 
-      ORDER BY price ASC
-    `);
+    // Select all columns to support any variation programmatically
+    const [rows]: any = await db.execute(`SELECT * FROM packages ORDER BY price ASC`);
 
-    res.json({ data: rows || [] });
+    const formatted = (rows || []).map((row: any) => ({
+      ...row,
+      fup_limit: row.fup_limit !== undefined ? row.fup_limit : row.fupLimit,
+      fupLimit: row.fupLimit !== undefined ? row.fupLimit : row.fup_limit,
+      mikrotik_profile: row.mikrotik_profile !== undefined ? row.mikrotik_profile : row.mikrotikProfile,
+      mikrotikProfile: row.mikrotikProfile !== undefined ? row.mikrotikProfile : row.mikrotik_profile,
+    }));
+
+    res.json({ data: formatted });
   } catch (error) {
     console.error('[getAllPackages] SQL error, returning empty dataset:', error);
     res.json({ data: [] });
@@ -67,23 +54,50 @@ export const getAllPackages = async (req: Request, res: Response) => {
  */
 export const createPackage = async (req: Request, res: Response) => {
   try {
-    await ensureTableExists();
+    const cols = await getPackagesColumns();
     const { name, speed, price, fupLimit, fup_limit, mikrotikProfile, mikrotik_profile, description } = req.body;
+
+    const hasFupLimit = cols.includes('fupLimit');
+    const hasFupLimitSnake = cols.includes('fup_limit');
+    const hasMikrotikProfile = cols.includes('mikrotikProfile');
+    const hasMikrotikProfileSnake = cols.includes('mikrotik_profile');
+    const hasDescription = cols.includes('description');
+
+    const insertCols = ['name', 'speed', 'price'];
+    const insertVals: any[] = [name || '', speed || 0, price || 0];
+    const placeholders = ['?', '?', '?'];
 
     const rawFup = fupLimit !== undefined ? fupLimit : fup_limit;
     const rawMikrotik = mikrotikProfile !== undefined ? mikrotikProfile : mikrotik_profile;
 
-    // Convert fup to integer safely if present, otherwise set null
-    const parsedFup = rawFup !== undefined && rawFup !== null ? parseInt(String(rawFup), 10) : null;
-    const finalFup = isNaN(parsedFup as number) ? null : parsedFup;
+    if (hasFupLimit) {
+      insertCols.push('fupLimit');
+      insertVals.push(rawFup !== undefined && rawFup !== null ? String(rawFup) : null);
+      placeholders.push('?');
+    } else if (hasFupLimitSnake) {
+      insertCols.push('fup_limit');
+      insertVals.push(rawFup !== undefined && rawFup !== null ? String(rawFup) : null);
+      placeholders.push('?');
+    }
 
-    const finalMikrotik = rawMikrotik !== undefined ? String(rawMikrotik) : null;
-    const finalDescription = description !== undefined ? String(description) : null;
+    if (hasMikrotikProfile) {
+      insertCols.push('mikrotikProfile');
+      insertVals.push(rawMikrotik !== undefined ? String(rawMikrotik) : null);
+      placeholders.push('?');
+    } else if (hasMikrotikProfileSnake) {
+      insertCols.push('mikrotik_profile');
+      insertVals.push(rawMikrotik !== undefined ? String(rawMikrotik) : null);
+      placeholders.push('?');
+    }
 
-    const [result]: any = await db.execute(
-      'INSERT INTO packages (name, speed, price, fupLimit, mikrotikProfile, description) VALUES (?, ?, ?, ?, ?, ?)',
-      [name || '', speed || 0, price || 0, finalFup, finalMikrotik, finalDescription]
-    );
+    if (hasDescription) {
+      insertCols.push('description');
+      insertVals.push(description !== undefined ? String(description) : null);
+      placeholders.push('?');
+    }
+
+    const query = `INSERT INTO packages (${insertCols.join(', ')}) VALUES (${placeholders.join(', ')})`;
+    const [result]: any = await db.execute(query, insertVals);
 
     res.status(201).json({ 
       id: result.insertId, 
@@ -101,23 +115,47 @@ export const createPackage = async (req: Request, res: Response) => {
  */
 export const updatePackage = async (req: Request, res: Response) => {
   try {
-    await ensureTableExists();
+    const cols = await getPackagesColumns();
     const { id } = req.params;
     const { name, speed, price, fupLimit, fup_limit, mikrotikProfile, mikrotik_profile, description } = req.body;
+
+    const hasFupLimit = cols.includes('fupLimit');
+    const hasFupLimitSnake = cols.includes('fup_limit');
+    const hasMikrotikProfile = cols.includes('mikrotikProfile');
+    const hasMikrotikProfileSnake = cols.includes('mikrotik_profile');
+    const hasDescription = cols.includes('description');
+
+    const updateSets = ['name = ?', 'speed = ?', 'price = ?'];
+    const updateVals: any[] = [name || '', speed || 0, price || 0];
 
     const rawFup = fupLimit !== undefined ? fupLimit : fup_limit;
     const rawMikrotik = mikrotikProfile !== undefined ? mikrotikProfile : mikrotik_profile;
 
-    const parsedFup = rawFup !== undefined && rawFup !== null ? parseInt(String(rawFup), 10) : null;
-    const finalFup = isNaN(parsedFup as number) ? null : parsedFup;
+    if (hasFupLimit) {
+      updateSets.push('fupLimit = ?');
+      updateVals.push(rawFup !== undefined && rawFup !== null ? String(rawFup) : null);
+    } else if (hasFupLimitSnake) {
+      updateSets.push('fup_limit = ?');
+      updateVals.push(rawFup !== undefined && rawFup !== null ? String(rawFup) : null);
+    }
 
-    const finalMikrotik = rawMikrotik !== undefined ? String(rawMikrotik) : null;
-    const finalDescription = description !== undefined ? String(description) : null;
+    if (hasMikrotikProfile) {
+      updateSets.push('mikrotikProfile = ?');
+      updateVals.push(rawMikrotik !== undefined ? String(rawMikrotik) : null);
+    } else if (hasMikrotikProfileSnake) {
+      updateSets.push('mikrotik_profile = ?');
+      updateVals.push(rawMikrotik !== undefined ? String(rawMikrotik) : null);
+    }
 
-    await db.execute(
-      'UPDATE packages SET name = ?, speed = ?, price = ?, fupLimit = ?, mikrotikProfile = ?, description = ? WHERE id = ?',
-      [name || '', speed || 0, price || 0, finalFup, finalMikrotik, finalDescription, id]
-    );
+    if (hasDescription) {
+      updateSets.push('description = ?');
+      updateVals.push(description !== undefined ? String(description) : null);
+    }
+
+    updateVals.push(id);
+
+    const query = `UPDATE packages SET ${updateSets.join(', ')} WHERE id = ?`;
+    await db.execute(query, updateVals);
 
     res.json({ message: 'Package updated successfully' });
   } catch (error) {
@@ -132,9 +170,7 @@ export const updatePackage = async (req: Request, res: Response) => {
  */
 export const deletePackage = async (req: Request, res: Response) => {
   try {
-    await ensureTableExists();
     const { id } = req.params;
-
     await db.execute('DELETE FROM packages WHERE id = ?', [id]);
     res.json({ message: 'Package deleted successfully' });
   } catch (error) {
