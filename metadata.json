@@ -1,0 +1,6 @@
+{
+  "name": "Triangle Self-Care",
+  "description": "Internet Service Provider customer management mobile application for managing connections, bills, and support tickets for Triangle.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
